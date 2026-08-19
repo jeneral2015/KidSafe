@@ -46,6 +46,30 @@ class ChildProfile {
       );
 }
 
+class FamilyAlert {
+  const FamilyAlert({
+    required this.id,
+    required this.childId,
+    required this.type,
+    required this.message,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String childId;
+  final String type;
+  final String message;
+  final DateTime? createdAt;
+
+  factory FamilyAlert.fromMap(String id, Map<String, dynamic> value) => FamilyAlert(
+        id: id,
+        childId: value['childId'] as String? ?? '',
+        type: value['type'] as String? ?? 'family_update',
+        message: value['message'] as String? ?? 'تحديث جديد للعائلة.',
+        createdAt: (value['createdAt'] as Timestamp?)?.toDate(),
+      );
+}
+
 class SafeZone {
   const SafeZone({
     required this.id,

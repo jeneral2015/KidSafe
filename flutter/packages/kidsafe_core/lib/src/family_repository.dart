@@ -90,6 +90,22 @@ class FamilyRepository {
     return ChildProfile(id: childRef.id, familyId: familyId, name: name.trim(), deviceStatus: 'waiting_for_pairing');
   }
 
+  Future<void> renameChild({
+    required String familyId,
+    required String childId,
+    required String name,
+  }) {
+    final normalizedName = name.trim();
+    if (normalizedName.isEmpty) throw ArgumentError.value(name, 'name', 'اسم الطفل مطلوب');
+    return _firestore.doc('families/$familyId/children/$childId').update({
+      'name': normalizedName,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> removeChild({required String familyId, required String childId}) =>
+      _firestore.doc('families/$familyId/children/$childId').delete();
+
   Future<String> createPairing({required String familyId, required String childId}) async {
     final user = _requireGuardian();
     final code = createPairingCode();

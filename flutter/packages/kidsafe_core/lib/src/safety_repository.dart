@@ -24,6 +24,13 @@ class SafetyRepository {
       .snapshots()
       .map((snapshot) => snapshot.docs.map((doc) => SafeZone.fromMap(doc.id, doc.data())).toList());
 
+  Stream<List<FamilyAlert>> watchRecentAlerts(String familyId, {int limit = 5}) => _firestore
+      .collection('families/$familyId/auditEvents')
+      .orderBy('createdAt', descending: true)
+      .limit(limit)
+      .snapshots()
+      .map((snapshot) => snapshot.docs.map((doc) => FamilyAlert.fromMap(doc.id, doc.data())).toList());
+
   Stream<ChildLocation?> watchChildLocation({required String familyId, required String childId}) => _firestore
       .doc('families/$familyId/children/$childId/location/current')
       .snapshots()

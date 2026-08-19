@@ -181,13 +181,20 @@ class GuardianDashboard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repository = ref.watch(familyRepositoryProvider);
+    final safety = ref.watch(safetyRepositoryProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('KidSafe Guardian'),
-        actions: [IconButton(onPressed: repository.signOut, icon: const Icon(Icons.logout), tooltip: 'تسجيل الخروج')],
+        title: const Text('عائلتي'),
+        actions: [
+          IconButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AccountAndFamilyScreen(profile: profile))),
+            icon: const Icon(Icons.account_circle_outlined),
+            tooltip: 'الحساب وإدارة الأسرة',
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddChild(context, ref),
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddChildScreen(familyId: profile.familyId))),
         icon: const Icon(Icons.person_add_alt_1),
         label: const Text('إضافة طفل'),
       ),
@@ -195,66 +202,369 @@ class GuardianDashboard extends ConsumerWidget {
         stream: repository.watchChildren(profile.familyId),
         builder: (context, snapshot) {
           final children = snapshot.data ?? const [];
-          return ListView(padding: const EdgeInsets.all(20), children: [
-            const SafetyHero(),
-            GuardianPushEnrollment(profile: profile),
-            const SizedBox(height: 20),
-            Text('أجهزة الأطفال', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 10),
-            if (children.isEmpty)
-              const Card(child: Padding(padding: EdgeInsets.all(20), child: Text('أضف طفلاً لإنشاء رمز QR وربط جهازه بخطوات واضحة.'))),
-            ...children.map((child) => Card(
-                  child: ListTile(
-                    leading: const CircleAvatar(child: Icon(Icons.shield_outlined)),
-                    title: Text(child.name),
-                    subtitle: Text(child.deviceStatus == 'linked' ? 'الجهاز مرتبط وجاهز لمراجعة الأذونات.' : 'بانتظار ربط جهاز الطفل.'),
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChildSafetyScreen(familyId: profile.familyId, child: child))),
-                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                      IconButton(onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChildSafetyScreen(familyId: profile.familyId, child: child))), icon: const Icon(Icons.location_on_outlined), tooltip: 'الموقع والمناطق الآمنة'),
-                      FilledButton.tonal(onPressed: () => _showPairing(context, ref, child), child: const Text('رمز الربط')),
-                    ]),
+          return StreamBuilder<List<FamilyAlert>>(
+            stream: safety.watchRecentAlerts(profile.familyId),
+            builder: (context, alertSnapshot) {
+              final alerts = alertSnapshot.data ?? const <FamilyAlert>[];
+              return RefreshIndicator(
+                onRefresh: () async => await Future<void>.delayed(const Duration(milliseconds: 350)),
+                child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 96), children: [
+                  FamilySummaryCard(
+                    profile: profile,
+                    childCount: children.length,
+                    onManageFamily: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => FamilyManagementScreen(profile: profile, children: children))),
                   ),
-                )),
-            const SizedBox(height: 92),
-          ]);
+                  const SizedBox(height: 24),
+                  Row(children: [
+                    Expanded(child: Text('الأطفال المسجلون', style: Theme.of(context).textTheme.titleLarge)),
+                    TextButton.icon(
+                      onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddChildScreen(familyId: profile.familyId))),
+                      icon: const Icon(Icons.add),
+                      label: const Text('إضافة'),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  if (snapshot.connectionState == ConnectionState.waiting)
+                    const Padding(padding: EdgeInsets.all(28), child: Center(child: CircularProgressIndicator()))
+                  else if (children.isEmpty)
+                    EmptyChildrenCard(onAddChild: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddChildScreen(familyId: profile.familyId))))
+                  else
+                    ...children.map((child) => ChildOverviewCard(
+                          child: child,
+                          onOpen: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChildSafetyScreen(familyId: profile.familyId, child: child))),
+                          onPair: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PairingCodeScreen(familyId: profile.familyId, child: child))),
+                        )),
+                  const SizedBox(height: 24),
+                  Text('التنبيهات الأخيرة', style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  if (alerts.isEmpty)
+                    const Card(child: ListTile(leading: Icon(Icons.notifications_none_outlined), title: Text('لا توجد تنبيهات جديدة'), subtitle: Text('ستظهر هنا تنبيهات الموقع والمناطق الآمنة وحالة أجهزة الأطفال.')))
+                  else
+                    ...alerts.map((alert) => AlertCard(alert: alert, childName: _childName(children, alert.childId))),
+                ]),
+              );
+            },
+          );
         },
       ),
     );
   }
+}
 
-  Future<void> _showAddChild(BuildContext context, WidgetRef ref) async {
-    final name = TextEditingController();
+String _childName(List<ChildProfile> children, String childId) {
+  for (final child in children) {
+    if (child.id == childId) return child.name;
+  }
+  return 'أحد الأطفال';
+}
+
+class FamilySummaryCard extends StatelessWidget {
+  const FamilySummaryCard({super.key, required this.profile, required this.childCount, required this.onManageFamily});
+  final GuardianProfile profile;
+  final int childCount;
+  final VoidCallback onManageFamily;
+
+  @override
+  Widget build(BuildContext context) => Card(
+        color: const Color(0xffEAF2FF),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(children: [
+            const CircleAvatar(radius: 25, backgroundColor: Color(0xff155EEF), child: Icon(Icons.family_restroom, color: Colors.white)),
+            const SizedBox(width: 14),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('مرحباً ${profile.displayName?.trim().isNotEmpty == true ? profile.displayName : 'بك'}', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Text(childCount == 0 ? 'ابدأ بإضافة جهاز طفل واحد.' : '$childCount ${childCount == 1 ? 'طفل مسجل' : 'أطفال مسجلون'}'),
+            ])),
+            IconButton(onPressed: onManageFamily, icon: const Icon(Icons.tune_outlined), tooltip: 'إدارة الأسرة'),
+          ]),
+        ),
+      );
+}
+
+class EmptyChildrenCard extends StatelessWidget {
+  const EmptyChildrenCard({super.key, required this.onAddChild});
+  final VoidCallback onAddChild;
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Icon(Icons.person_add_alt_1_outlined, size: 34, color: Color(0xff155EEF)),
+            const SizedBox(height: 10),
+            Text('لا يوجد أطفال مسجلون بعد', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            const Text('أضف الطفل أولاً، ثم سيظهر رمز رقمي وQR لربط جهازه بخطوات بسيطة.'),
+            const SizedBox(height: 16),
+            FilledButton.icon(onPressed: onAddChild, icon: const Icon(Icons.add), label: const Text('إضافة أول طفل')),
+          ]),
+        ),
+      );
+}
+
+class ChildOverviewCard extends StatelessWidget {
+  const ChildOverviewCard({super.key, required this.child, required this.onOpen, required this.onPair});
+  final ChildProfile child;
+  final VoidCallback onOpen;
+  final VoidCallback onPair;
+
+  @override
+  Widget build(BuildContext context) {
+    final linked = child.deviceStatus == 'linked';
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              CircleAvatar(backgroundColor: linked ? const Color(0xffDCFCE7) : const Color(0xffFEF3C7), child: Icon(linked ? Icons.shield_outlined : Icons.link_outlined, color: linked ? const Color(0xff067647) : const Color(0xffB54708))),
+              const SizedBox(width: 12),
+              Expanded(child: Text(child.name, style: Theme.of(context).textTheme.titleMedium)),
+              Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.outline),
+            ]),
+            const SizedBox(height: 14),
+            _StatusBadge(linked: linked),
+            const SizedBox(height: 14),
+            Row(children: [
+              OutlinedButton.icon(onPressed: onOpen, icon: const Icon(Icons.visibility_outlined), label: const Text('عرض الطفل')),
+              const SizedBox(width: 10),
+              if (!linked) FilledButton.tonal(onPressed: onPair, child: const Text('رمز الربط')),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.linked});
+  final bool linked;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(color: linked ? const Color(0xffECFDF3) : const Color(0xffFFF7ED), borderRadius: BorderRadius.circular(99)),
+        child: Text(linked ? 'الجهاز مرتبط' : 'بانتظار الربط', style: TextStyle(color: linked ? const Color(0xff067647) : const Color(0xffB54708), fontWeight: FontWeight.w600)),
+      );
+}
+
+class AlertCard extends StatelessWidget {
+  const AlertCard({super.key, required this.alert, required this.childName});
+  final FamilyAlert alert;
+  final String childName;
+
+  @override
+  Widget build(BuildContext context) {
+    final isUrgent = alert.type == 'safe_zone_exit';
+    final icon = isUrgent ? Icons.warning_amber_rounded : Icons.notifications_none_outlined;
+    final color = isUrgent ? const Color(0xffB42318) : const Color(0xff155EEF);
+    return Card(child: ListTile(leading: CircleAvatar(backgroundColor: color.withValues(alpha: .12), child: Icon(icon, color: color)), title: Text(childName), subtitle: Text(alert.message), trailing: alert.createdAt == null ? null : Text(_compactTime(alert.createdAt!), style: Theme.of(context).textTheme.labelSmall)));
+  }
+}
+
+String _compactTime(DateTime value) {
+  final local = value.toLocal();
+  return '${local.day}/${local.month} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+}
+
+class AddChildScreen extends ConsumerStatefulWidget {
+  const AddChildScreen({super.key, required this.familyId});
+  final String familyId;
+
+  @override
+  ConsumerState<AddChildScreen> createState() => _AddChildScreenState();
+}
+
+class _AddChildScreenState extends ConsumerState<AddChildScreen> {
+  final _name = TextEditingController();
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() { _name.dispose(); super.dispose(); }
+
+  Future<void> _create() async {
+    final value = _name.text.trim();
+    if (value.isEmpty) { setState(() => _error = 'اكتب اسم الطفل أولاً.'); return; }
+    setState(() { _saving = true; _error = null; });
+    try {
+      final child = await ref.read(familyRepositoryProvider).addChild(familyId: widget.familyId, name: value);
+      if (!mounted) return;
+      await Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => PairingCodeScreen(familyId: widget.familyId, child: child, createdNow: true)));
+    } catch (_) {
+      if (mounted) setState(() => _error = 'تعذر إنشاء الطفل الآن. تحقق من الاتصال ثم حاول مرة أخرى.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('إضافة طفل')),
+        body: SafeArea(
+          child: ListView(padding: const EdgeInsets.all(20), children: [
+            const Icon(Icons.person_add_alt_1_outlined, size: 48, color: Color(0xff155EEF)),
+            const SizedBox(height: 16),
+            Text('لنربط جهاز الطفل', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 8),
+            const Text('بعد حفظ الاسم، سنعرض رمزاً رقمياً وQR لمسحه من تطبيق KidSafe Child.'),
+            const SizedBox(height: 28),
+            TextField(controller: _name, autofocus: true, textInputAction: TextInputAction.done, onSubmitted: (_) => _create(), decoration: const InputDecoration(labelText: 'اسم الطفل', hintText: 'مثال: أحمد')),
+            if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: const TextStyle(color: Color(0xffB42318)))),
+            const SizedBox(height: 20),
+            FilledButton.icon(onPressed: _saving ? null : _create, icon: const Icon(Icons.qr_code_2), label: Text(_saving ? 'جارٍ الإنشاء...' : 'إنشاء رمز الربط'), style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52))),
+          ]),
+        ),
+      );
+}
+
+class PairingCodeScreen extends ConsumerStatefulWidget {
+  const PairingCodeScreen({super.key, required this.familyId, required this.child, this.createdNow = false});
+  final String familyId;
+  final ChildProfile child;
+  final bool createdNow;
+
+  @override
+  ConsumerState<PairingCodeScreen> createState() => _PairingCodeScreenState();
+}
+
+class _PairingCodeScreenState extends ConsumerState<PairingCodeScreen> {
+  String? _code;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() { super.initState(); _createCode(); }
+
+  Future<void> _createCode() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final code = await ref.read(familyRepositoryProvider).createPairing(familyId: widget.familyId, childId: widget.child.id);
+      if (mounted) setState(() => _code = code);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'تعذر إنشاء الرمز. حاول مرة أخرى.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final code = _code;
+    final payload = code == null ? null : pairingPayload(familyId: widget.familyId, childId: widget.child.id, code: code);
+    return Scaffold(
+      appBar: AppBar(title: Text('ربط جهاز ${widget.child.name}')),
+      body: SafeArea(
+        child: ListView(padding: const EdgeInsets.all(20), children: [
+          Text(widget.createdNow ? 'تمت إضافة ${widget.child.name}' : 'رمز ربط ${widget.child.name}', style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          const Text('على جهاز الطفل، افتح KidSafe Child، واختر «جهاز الطفل»، ثم امسح QR أو أدخل الرمز التالي.'),
+          const SizedBox(height: 24),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: _loading
+                  ? const SizedBox(height: 250, child: Center(child: CircularProgressIndicator()))
+                  : _error != null
+                      ? SizedBox(height: 250, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Text(_error!, textAlign: TextAlign.center), const SizedBox(height: 12), FilledButton(onPressed: _createCode, child: const Text('إعادة المحاولة'))])))
+                      : Column(children: [
+                          QrImageView(data: payload!, size: 210),
+                          const SizedBox(height: 16),
+                          SelectableText(code!, style: Theme.of(context).textTheme.displaySmall?.copyWith(letterSpacing: 5, fontWeight: FontWeight.bold)),
+                        ]),
+            ),
+          ),
+          const SizedBox(height: 14),
+          const ListTile(leading: Icon(Icons.timer_outlined), title: Text('الرمز صالح لمدة 10 دقائق'), subtitle: Text('يمكن إنشاء رمز جديد من بطاقة الطفل إذا انتهت المدة.')),
+          const SizedBox(height: 12),
+          FilledButton.tonalIcon(onPressed: _loading ? null : _createCode, icon: const Icon(Icons.refresh), label: const Text('إنشاء رمز جديد')),
+        ]),
+      ),
+    );
+  }
+}
+
+class AccountAndFamilyScreen extends ConsumerWidget {
+  const AccountAndFamilyScreen({super.key, required this.profile});
+  final GuardianProfile profile;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
+        appBar: AppBar(title: const Text('الحساب والأسرة')),
+        body: StreamBuilder<List<ChildProfile>>(
+          stream: ref.watch(familyRepositoryProvider).watchChildren(profile.familyId),
+          builder: (context, snapshot) {
+            final children = snapshot.data ?? const <ChildProfile>[];
+            return ListView(padding: const EdgeInsets.all(16), children: [
+              Card(child: ListTile(leading: const CircleAvatar(child: Icon(Icons.person_outline)), title: Text(profile.displayName?.trim().isNotEmpty == true ? profile.displayName! : 'حساب الوالد'), subtitle: const Text('حساب إدارة KidSafe'))),
+              GuardianPushEnrollment(profile: profile),
+              const SizedBox(height: 8),
+              Card(child: ListTile(leading: const Icon(Icons.manage_accounts_outlined), title: const Text('إدارة الأطفال'), subtitle: Text('${children.length} أطفال مسجلون — تعديل الاسم أو إزالة جهاز من العائلة.'), trailing: const Icon(Icons.chevron_left), onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => FamilyManagementScreen(profile: profile, children: children))))),
+              Card(child: ListTile(leading: const Icon(Icons.logout), title: const Text('تسجيل الخروج'), onTap: () async => await ref.read(familyRepositoryProvider).signOut())),
+            ]);
+          },
+        ),
+      );
+}
+
+class FamilyManagementScreen extends ConsumerWidget {
+  const FamilyManagementScreen({super.key, required this.profile, required this.children});
+  final GuardianProfile profile;
+  final List<ChildProfile> children;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
+        appBar: AppBar(title: const Text('إدارة الأطفال')),
+        floatingActionButton: FloatingActionButton.extended(onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddChildScreen(familyId: profile.familyId))), icon: const Icon(Icons.person_add_alt_1), label: const Text('إضافة طفل')),
+        body: children.isEmpty
+            ? EmptyChildrenCard(onAddChild: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddChildScreen(familyId: profile.familyId))))
+            : ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 92), children: [
+                const Text('يمكنك تعديل اسم الطفل أو إزالة سجله من العائلة. الإزالة لا تتم إلا بعد تأكيد صريح.'),
+                const SizedBox(height: 14),
+                ...children.map((child) => Card(child: ListTile(
+                      leading: const CircleAvatar(child: Icon(Icons.child_care_outlined)),
+                      title: Text(child.name),
+                      subtitle: Text(child.deviceStatus == 'linked' ? 'الجهاز مرتبط' : 'بانتظار الربط'),
+                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                        IconButton(onPressed: () => _editChild(context, ref, child), icon: const Icon(Icons.edit_outlined), tooltip: 'تعديل الاسم'),
+                        IconButton(onPressed: () => _confirmRemove(context, ref, child), icon: const Icon(Icons.delete_outline, color: Color(0xffB42318)), tooltip: 'إزالة الطفل'),
+                      ]),
+                    ))),
+              ]),
+      );
+
+  Future<void> _editChild(BuildContext context, WidgetRef ref, ChildProfile child) async {
+    final name = TextEditingController(text: child.name);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('إضافة جهاز طفل'),
+        title: Text('تعديل اسم ${child.name}'),
         content: TextField(controller: name, autofocus: true, decoration: const InputDecoration(labelText: 'اسم الطفل')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
-          FilledButton(onPressed: () async { await ref.read(familyRepositoryProvider).addChild(familyId: profile.familyId, name: name.text); if (dialogContext.mounted) Navigator.pop(dialogContext); }, child: const Text('إنشاء الرمز')),
+          FilledButton(onPressed: () async { await ref.read(familyRepositoryProvider).renameChild(familyId: profile.familyId, childId: child.id, name: name.text); if (dialogContext.mounted) Navigator.pop(dialogContext); }, child: const Text('حفظ')),
         ],
       ),
     );
     name.dispose();
   }
 
-  Future<void> _showPairing(BuildContext context, WidgetRef ref, ChildProfile child) async {
-    final code = await ref.read(familyRepositoryProvider).createPairing(familyId: profile.familyId, childId: child.id);
-    final payload = pairingPayload(familyId: profile.familyId, childId: child.id, code: code);
-    if (!context.mounted) return;
-    await showModalBottomSheet<void>(
+  Future<void> _confirmRemove(BuildContext context, WidgetRef ref, ChildProfile child) async {
+    await showDialog<void>(
       context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('اربط جهاز ${child.name}', style: Theme.of(sheetContext).textTheme.titleLarge),
-          const SizedBox(height: 10),
-          QrImageView(data: payload, size: 200),
-          SelectableText(code, style: Theme.of(sheetContext).textTheme.displaySmall),
-          const SizedBox(height: 8),
-          const Text('على جهاز الطفل: اختر «جهاز الطفل»، ثم امسح الرمز أو أدخل الأرقام الثمانية. ينتهي الرمز بعد 10 دقائق.'),
-        ]),
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded, color: Color(0xffB42318)),
+        title: Text('إزالة ${child.name}؟'),
+        content: const Text('سيُزال الطفل من لوحة العائلة ولن يعود جهازه قادراً على تحديث بيانات هذه الأسرة. لا يمكن التراجع عن هذه العملية من التطبيق.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+          FilledButton(onPressed: () async { await ref.read(familyRepositoryProvider).removeChild(familyId: profile.familyId, childId: child.id); if (dialogContext.mounted) Navigator.pop(dialogContext); }, style: FilledButton.styleFrom(backgroundColor: const Color(0xffB42318)), child: const Text('إزالة الطفل')),
+        ],
       ),
     );
   }
