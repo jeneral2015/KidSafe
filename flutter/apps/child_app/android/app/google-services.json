@@ -1,0 +1,83 @@
+{
+  "project_info": {
+    "project_number": "40877142171",
+    "firebase_url": "https://kidsafe-5739d-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "kidsafe-5739d",
+    "storage_bucket": "kidsafe-5739d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:40877142171:android:c4e2d5075a44e1d32c163e",
+        "android_client_info": {
+          "package_name": "com.app.kidsafeguardian"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "40877142171-phuimjf9rrvmqe7b58mid4vv80j67l5f.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA7nHDKLFD2Uf0uSW8eK68l3pto-wePGQ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "40877142171-phuimjf9rrvmqe7b58mid4vv80j67l5f.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "40877142171-9su11dadkjdmt2p6pq92rfqavpnq5vsg.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.kidsafe.kidsafe"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:40877142171:android:a9193a46a56eedbc2c163e",
+        "android_client_info": {
+          "package_name": "com.kidsafe.kidsafe"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "40877142171-phuimjf9rrvmqe7b58mid4vv80j67l5f.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA7nHDKLFD2Uf0uSW8eK68l3pto-wePGQ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "40877142171-phuimjf9rrvmqe7b58mid4vv80j67l5f.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "40877142171-9su11dadkjdmt2p6pq92rfqavpnq5vsg.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.kidsafe.kidsafe"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,55 @@
+name: Build KidSafe Child Debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'flutter/**'
+      - '.github/workflows/build-kidsafe-child-debug.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-child-debug-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter/apps/child_app
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: stable
+          cache: true
+
+      - name: Resolve packages
+        run: flutter pub get
+
+      - name: Analyze Dart code
+        run: flutter analyze
+
+      - name: Run deterministic tests
+        run: flutter test
+
+      - name: Build Android debug APK
+        run: flutter build apk --debug
+
+      - name: Upload KidSafe Child APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: KidSafe-Child-debug-APK
+          path: flutter/apps/child_app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7

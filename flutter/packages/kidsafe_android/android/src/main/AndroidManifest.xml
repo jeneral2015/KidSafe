@@ -1,0 +1,26 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  package="com.jeneral2015.kidsafe_android">
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+  <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+  <application>
+    <service
+      android:name=".VisibleScreenShareService"
+      android:exported="false"
+      android:foregroundServiceType="mediaProjection" />
+    <receiver
+      android:name=".KidSafeDeviceAdminReceiver"
+      android:description="@string/kidsafe_device_admin_description"
+      android:exported="true"
+      android:label="KidSafe إدارة العائلة"
+      android:permission="android.permission.BIND_DEVICE_ADMIN">
+      <meta-data
+        android:name="android.app.device_admin"
+        android:resource="@xml/kidsafe_device_admin_policies" />
+      <intent-filter>
+        <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+        <action android:name="android.app.action.PROFILE_PROVISIONING_COMPLETE" />
+      </intent-filter>
+    </receiver>
+  </application>
+</manifest>
