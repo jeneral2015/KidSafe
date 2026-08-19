@@ -8,7 +8,7 @@ on:
       - '.github/workflows/build-kidsafe-child-debug.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-child-debug-apk:
@@ -53,3 +53,12 @@ jobs:
           path: flutter/apps/child_app/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Publish temporary direct-download APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kidsafe-child-debug-${{ github.run_number }}
+          name: KidSafe Child test APK ${{ github.run_number }}
+          prerelease: true
+          body: This is a debug test build for family-device testing only.
+          files: flutter/apps/child_app/build/app/outputs/flutter-apk/app-debug.apk
